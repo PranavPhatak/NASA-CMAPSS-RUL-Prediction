@@ -9,17 +9,6 @@ WINDOW_SIZE = 30
 # reflect recent degradation, long enough to smooth single-cycle noise.
 TREND_WINDOW = 5
 
-WITH_CONSTANT_TRAIN = (
-    "../CMAPSSData/Processed/"
-    "train_FD001_cleaned_added_RUL_training_scaled(not_removed_the_sensor).csv"
-)
-
-WITH_CONSTANT_VAL = (
-    "../CMAPSSData/Processed/"
-    "train_FD001_cleaned_added_RUL_validation_scaled(not_removed_the_sensor).csv"
-)
-
-
 WITHOUT_CONSTANT_TRAIN = (
     "../CMAPSSData/Processed/"
     "train_FD001_cleaned_added_RUL_training_scaled(removed_the_sensor).csv"
@@ -28,26 +17,6 @@ WITHOUT_CONSTANT_TRAIN = (
 WITHOUT_CONSTANT_VAL = (
     "../CMAPSSData/Processed/"
     "train_FD001_cleaned_added_RUL_validation_scaled(removed_the_sensor).csv"
-)
-
-WITH_CONSTANT_X_TRAIN = (
-    "../CMAPSSData/Processed/"
-    "X_train_sequences(not_removed_the_sensor).npy"
-)
-
-WITH_CONSTANT_Y_TRAIN = (
-    "../CMAPSSData/Processed/"
-    "y_train_sequences(not_removed_the_sensor).npy"
-)
-
-WITH_CONSTANT_X_VAL = (
-    "../CMAPSSData/Processed/"
-    "X_val_sequences(not_removed_the_sensor).npy"
-)
-
-WITH_CONSTANT_Y_VAL = (
-    "../CMAPSSData/Processed/"
-    "y_val_sequences(not_removed_the_sensor).npy"
 )
 
 WITHOUT_CONSTANT_X_TRAIN = (
@@ -96,8 +65,8 @@ def add_trend_features(engine_data, feature_columns, trend_window=TREND_WINDOW):
 
     return pd.concat(
         [engine_data.reset_index(drop=True),
-         roll_mean.reset_index(drop=True),
-         roc.reset_index(drop=True)],
+        roll_mean.reset_index(drop=True),
+        roc.reset_index(drop=True)],
         axis=1
     )
 
@@ -258,20 +227,6 @@ if __name__ == "__main__":
     # debugging, since it still carries the 6 constant/near-constant
     # sensors identified in 01_data_cleaning.ipynb.
 
-    X_with_train, y_with_train = process_dataset(
-        input_path=WITH_CONSTANT_TRAIN,
-        x_output_path=WITH_CONSTANT_X_TRAIN,
-        y_output_path=WITH_CONSTANT_Y_TRAIN,
-        dataset_name="ALL SENSORS - TRAINING"
-    )
-
-    X_with_val, y_with_val = process_dataset(
-        input_path=WITH_CONSTANT_VAL,
-        x_output_path=WITH_CONSTANT_X_VAL,
-        y_output_path=WITH_CONSTANT_Y_VAL,
-        dataset_name="ALL SENSORS - VALIDATION"
-    )
-
     X_without_train, y_without_train = process_dataset(
         input_path=WITHOUT_CONSTANT_TRAIN,
         x_output_path=WITHOUT_CONSTANT_X_TRAIN,
@@ -293,10 +248,6 @@ if __name__ == "__main__":
 
     print("\nWindow size:", WINDOW_SIZE)
     print("Trend window:", TREND_WINDOW)
-
-    print("\n---------- ALL SENSORS RETAINED (debug only) ----------")
-    print("Training X:", X_with_train.shape)
-    print("Validation X:", X_with_val.shape)
 
     print("\n---------- CONSTANT SENSORS REMOVED (use this for training) ----------")
     print("Training X:", X_without_train.shape)
