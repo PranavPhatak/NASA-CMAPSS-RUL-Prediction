@@ -136,10 +136,10 @@ print(results.to_string(index=False))
 # 10. SAVE RESULTS
 # ============================================================
 
-# results.to_csv(
-#     RESULTS_PATH,
-#     index=False
-# )
+results.to_csv(
+    RESULTS_PATH,
+    index=False
+)
 
 print("\n========================================")
 print("Results saved successfully:")
