@@ -4,11 +4,6 @@ import os
 
 WINDOW_SIZE = 30
 
-# How many cycles back to look for the rolling mean / rate-of-change
-# trend features. 5 is a common choice for CMAPSS: short enough to
-# reflect recent degradation, long enough to smooth single-cycle noise.
-TREND_WINDOW = 5
-
 WITHOUT_CONSTANT_TRAIN = (
     "../CMAPSSData/Processed/"
     "train_FD001_cleaned_added_RUL_training_scaled(removed_the_sensor).csv"
@@ -39,39 +34,7 @@ WITHOUT_CONSTANT_Y_VAL = (
     "y_val_sequences(removed_the_sensor).npy"
 )
 
-
-def add_trend_features(engine_data, feature_columns, trend_window=TREND_WINDOW):
-    """
-    Adds two trend channels per existing feature, computed strictly from
-    that engine's own past cycles (no leakage across engines, and no
-    leakage across the train/val boundary since this runs separately
-    on each already-split dataframe):
-
-      - rolling mean over the last `trend_window` cycles
-      - rate of change vs. `trend_window` cycles ago
-
-    This gives the LSTM an explicit degradation-slope signal instead of
-    making it infer trend purely from raw scaled values. Doubles the
-    feature count (e.g. 18 -> 54: original + roll_mean + roc).
-    """
-    base = engine_data[feature_columns]
-
-    roll_mean = base.rolling(window=trend_window, min_periods=1).mean()
-    roll_mean.columns = [f"{c}_rollmean{trend_window}" for c in feature_columns]
-
-    roc = base.diff(trend_window)
-    roc = roc.fillna(0.0)
-    roc.columns = [f"{c}_roc{trend_window}" for c in feature_columns]
-
-    return pd.concat(
-        [engine_data.reset_index(drop=True),
-        roll_mean.reset_index(drop=True),
-        roc.reset_index(drop=True)],
-        axis=1
-    )
-
-
-def create_sequences(df, window_size=30, trend_window=TREND_WINDOW):
+def create_sequences(df, window_size=30):
 
     X = []
     y = []
@@ -80,16 +43,16 @@ def create_sequences(df, window_size=30, trend_window=TREND_WINDOW):
         by=["unit_id", "cycle"]
     ).reset_index(drop=True)
 
-    base_feature_columns = [
+    feature_columns = [
         column
         for column in df.columns
         if column not in ["unit_id", "cycle", "RUL"]
     ]
 
-    print("\nBase features:", len(base_feature_columns))
-    print("Trend window:", trend_window, "cycles (adds rolling mean + rate-of-change per feature)")
+    print("\nFeatures used:")
+    print(feature_columns)
 
-    engineered_feature_columns = None
+    print("\nNumber of features:", len(feature_columns))
 
     for unit_id, engine_data in df.groupby("unit_id"):
 
@@ -98,23 +61,8 @@ def create_sequences(df, window_size=30, trend_window=TREND_WINDOW):
             by="cycle"
         ).reset_index(drop=True)
 
-        # Add trend features BEFORE windowing, using only this engine's
-        # own history -- rolling/diff never cross engine boundaries here
-        # because we're already inside the per-engine group.
-        engine_data = add_trend_features(
-            engine_data, base_feature_columns, trend_window
-        )
-
-        if engineered_feature_columns is None:
-            engineered_feature_columns = [
-                column
-                for column in engine_data.columns
-                if column not in ["unit_id", "cycle", "RUL"]
-            ]
-            print("Total features after trend engineering:", len(engineered_feature_columns))
-
         # Get feature values
-        features = engine_data[engineered_feature_columns].values
+        features = engine_data[feature_columns].values
 
         # Get RUL values
         rul = engine_data["RUL"].values
@@ -167,6 +115,10 @@ def process_dataset(
 
     print("\nDataset shape:", df.shape)
 
+    # --------------------------------------------------------
+    # 2. Basic checks
+    # --------------------------------------------------------
+
     print(
         "Number of engines:",
         df["unit_id"].nunique()
@@ -184,8 +136,7 @@ def process_dataset(
 
     X, y = create_sequences(
         df,
-        window_size=WINDOW_SIZE,
-        trend_window=TREND_WINDOW
+        window_size=WINDOW_SIZE
     )
 
     print("\nSequence creation completed.")
@@ -207,7 +158,7 @@ def process_dataset(
     print(x_output_path)
     print(y_output_path)
 
-
+    
     if len(X) > 0:
 
         print("\nFirst sequence shape:")
@@ -216,43 +167,43 @@ def process_dataset(
         print("\nFirst target:")
         print(y[0])
 
+        print("\nFirst sequence:")
+        print(X[0])
+
     return X, y
 
+X_without_train, y_without_train = process_dataset(
+    input_path=WITHOUT_CONSTANT_TRAIN,
+    x_output_path=WITHOUT_CONSTANT_X_TRAIN,
+    y_output_path=WITHOUT_CONSTANT_Y_TRAIN,
+    dataset_name="CONSTANT SENSORS REMOVED - TRAINING"
+)
 
-if __name__ == "__main__":
 
-    # NOTE: only the "removed_the_sensor" (18-base-feature) variant is
-    # the one 04_LSTM should actually load going forward -- the
-    # "not_removed_the_sensor" variant is kept only for comparison/
-    # debugging, since it still carries the 6 constant/near-constant
-    # sensors identified in 01_data_cleaning.ipynb.
+X_without_val, y_without_val = process_dataset(
+    input_path=WITHOUT_CONSTANT_VAL,
+    x_output_path=WITHOUT_CONSTANT_X_VAL,
+    y_output_path=WITHOUT_CONSTANT_Y_VAL,
+    dataset_name="CONSTANT SENSORS REMOVED - VALIDATION"
+)
 
-    X_without_train, y_without_train = process_dataset(
-        input_path=WITHOUT_CONSTANT_TRAIN,
-        x_output_path=WITHOUT_CONSTANT_X_TRAIN,
-        y_output_path=WITHOUT_CONSTANT_Y_TRAIN,
-        dataset_name="CONSTANT SENSORS REMOVED - TRAINING"
-    )
+print("\n\n")
+print("=" * 70)
+print("SEQUENCE CREATION SUMMARY")
+print("=" * 70)
 
-    X_without_val, y_without_val = process_dataset(
-        input_path=WITHOUT_CONSTANT_VAL,
-        x_output_path=WITHOUT_CONSTANT_X_VAL,
-        y_output_path=WITHOUT_CONSTANT_Y_VAL,
-        dataset_name="CONSTANT SENSORS REMOVED - VALIDATION"
-    )
+print("\nWindow size:", WINDOW_SIZE)
 
-    print("\n\n")
-    print("=" * 70)
-    print("SEQUENCE CREATION SUMMARY")
-    print("=" * 70)
+print("\n---------- CONSTANT SENSORS REMOVED ----------")
 
-    print("\nWindow size:", WINDOW_SIZE)
-    print("Trend window:", TREND_WINDOW)
+print("Training X:", X_without_train.shape)
 
-    print("\n---------- CONSTANT SENSORS REMOVED (use this for training) ----------")
-    print("Training X:", X_without_train.shape)
-    print("Training y:", y_without_train.shape)
-    print("Validation X:", X_without_val.shape)
-    print("Validation y:", y_without_val.shape)
+print("Training y:", y_without_train.shape)
 
-    print("\nALL SEQUENCES CREATED SUCCESSFULLY")
+print("Validation X:", X_without_val.shape)
+
+print("Validation y:", y_without_val.shape)
+
+
+print("\n")
+print("ALL SEQUENCES CREATED SUCCESSFULLY")
