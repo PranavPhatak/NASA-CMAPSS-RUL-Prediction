@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-WINDOW_SIZE = 30
+WINDOW_SIZE = 50
 
 WITHOUT_CONSTANT_TRAIN = (
     "../CMAPSSData/Processed/"
