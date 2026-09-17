@@ -33,7 +33,7 @@ import pandas as pd
 # 1. SETTINGS
 # ============================================================
 
-WINDOW_SIZE = 50
+WINDOW_SIZE = 60
 RUL_CAP = 130
 
 
