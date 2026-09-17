@@ -115,10 +115,6 @@ def process_dataset(
 
     print("\nDataset shape:", df.shape)
 
-    # --------------------------------------------------------
-    # 2. Basic checks
-    # --------------------------------------------------------
-
     print(
         "Number of engines:",
         df["unit_id"].nunique()
