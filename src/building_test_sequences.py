@@ -28,19 +28,8 @@ import joblib
 import numpy as np
 import pandas as pd
 
-
-# ============================================================
-# 1. SETTINGS
-# ============================================================
-
 WINDOW_SIZE = 30
 RUL_CAP = 125
-
-
-# ============================================================
-# 2. CONSTANT SENSORS
-# ============================================================
-# These are the same 6 sensors removed during training.
 
 CONSTANT_SENSORS = [
     "sensor_1",
@@ -52,19 +41,11 @@ CONSTANT_SENSORS = [
 ]
 
 
-# ============================================================
-# 3. COLUMN NAMES
-# ============================================================
-
 COLUMNS = (
     ["unit_id", "cycle", "setting_1", "setting_2", "setting_3"]
     + [f"sensor_{i}" for i in range(1, 22)]
 )
 
-
-# ============================================================
-# 4. FILE PATHS
-# ============================================================
 
 TEST_RAW_PATH = "../CMAPSSData/Raw/test_FD001.txt"
 
@@ -88,15 +69,7 @@ Y_TEST_OUT = (
 )
 
 
-# ============================================================
-# 5. BUILD OFFICIAL TEST SEQUENCES
-# ============================================================
-
 def build_official_test_sequences():
-
-    # --------------------------------------------------------
-    # Load raw test data
-    # --------------------------------------------------------
 
     print("Loading raw test set:")
     print(TEST_RAW_PATH)
@@ -112,21 +85,12 @@ def build_official_test_sequences():
     print("Test engines:", df["unit_id"].nunique())
 
 
-    # --------------------------------------------------------
-    # Remove constant sensors
-    # --------------------------------------------------------
-
     print("\nRemoving constant sensors:")
 
     for sensor in CONSTANT_SENSORS:
         print("  -", sensor)
 
     df = df.drop(columns=CONSTANT_SENSORS)
-
-
-    # --------------------------------------------------------
-    # Load true RUL values
-    # --------------------------------------------------------
 
     true_rul = pd.read_csv(
         RUL_TRUE_PATH,
@@ -137,10 +101,6 @@ def build_official_test_sequences():
     print("\nTrue RUL values:", len(true_rul))
 
 
-    # --------------------------------------------------------
-    # Check number of engines and RUL values
-    # --------------------------------------------------------
-
     number_of_engines = df["unit_id"].nunique()
 
     assert len(true_rul) == number_of_engines, (
@@ -149,19 +109,6 @@ def build_official_test_sequences():
         f"Got {len(true_rul)} RUL values for "
         f"{number_of_engines} engines."
     )
-
-
-    # --------------------------------------------------------
-    # Identify model features
-    # --------------------------------------------------------
-    # Do NOT include:
-    #   unit_id
-    #   cycle
-    #
-    # After removing 6 constant sensors:
-    #
-    # 3 settings + 15 sensors = 18 features
-    # --------------------------------------------------------
 
     feature_columns = [
         column
@@ -173,19 +120,11 @@ def build_official_test_sequences():
     print(feature_columns)
 
 
-    # --------------------------------------------------------
-    # Load scaler fitted on training data
-    # --------------------------------------------------------
-
     print("\nLoading training scaler:")
     print(SCALER_PATH)
 
     scaler = joblib.load(SCALER_PATH)
 
-
-    # --------------------------------------------------------
-    # Check scaler feature count
-    # --------------------------------------------------------
 
     if len(feature_columns) != scaler.n_features_in_:
         raise ValueError(
@@ -197,33 +136,15 @@ def build_official_test_sequences():
         )
 
 
-    # --------------------------------------------------------
-    # Scale test data
-    # --------------------------------------------------------
-    # IMPORTANT:
-    # Use transform() only.
-    #
-    # Never use fit_transform() on test data.
-    # --------------------------------------------------------
-
     df[feature_columns] = scaler.transform(
         df[feature_columns]
     )
 
 
-    # --------------------------------------------------------
-    # Create arrays
-    # --------------------------------------------------------
-
     X_test = []
     y_test = []
 
     skipped_padded = 0
-
-
-    # --------------------------------------------------------
-    # Process every engine separately
-    # --------------------------------------------------------
 
     for idx, (unit_id, engine_data) in enumerate(
         df.groupby("unit_id")
@@ -236,21 +157,11 @@ def build_official_test_sequences():
             .reset_index(drop=True)
         )
 
-
-        # ----------------------------------------------------
-        # Extract the 18 model features
-        # ----------------------------------------------------
-
         features = engine_data[feature_columns].values
 
 
         # Number of cycles available for this engine
         num_cycles = len(features)
-
-
-        # ----------------------------------------------------
-        # Take last WINDOW_SIZE cycles
-        # ----------------------------------------------------
 
         if num_cycles < WINDOW_SIZE:
 
@@ -278,36 +189,15 @@ def build_official_test_sequences():
 
             window = features[-WINDOW_SIZE:]
 
-
-        # ----------------------------------------------------
-        # Get true RUL
-        # ----------------------------------------------------
-        # RUL_FD001.txt follows the engine order:
-        #
-        # Engine 1 -> first RUL
-        # Engine 2 -> second RUL
-        # ...
-        #
-        # Apply same RUL cap used during training.
-        # ----------------------------------------------------
-
         target = min(
             true_rul.iloc[idx]["RUL"],
             RUL_CAP
         )
 
 
-        # ----------------------------------------------------
-        # Store sequence and target
-        # ----------------------------------------------------
-
         X_test.append(window)
         y_test.append(target)
 
-
-    # ========================================================
-    # 6. CONVERT TO NUMPY ARRAYS
-    # ========================================================
 
     X_test = np.array(
         X_test,
@@ -319,14 +209,7 @@ def build_official_test_sequences():
         dtype=np.float32
     )
 
-
-    # ========================================================
-    # 7. CHECK FINAL SHAPES
-    # ========================================================
-
-    print("\n========================================")
     print("OFFICIAL TEST DATA")
-    print("========================================")
 
     print(
         f"Engines padded "
@@ -359,10 +242,6 @@ def build_official_test_sequences():
         )
 
 
-    # ========================================================
-    # 8. SAVE TEST DATA
-    # ========================================================
-
     np.save(
         X_TEST_OUT,
         X_test
@@ -373,10 +252,8 @@ def build_official_test_sequences():
         y_test
     )
 
-
-    print("\n========================================")
     print("FILES SAVED")
-    print("========================================")
+
 
     print("X_test:", X_TEST_OUT)
     print("y_test:", Y_TEST_OUT)
@@ -384,10 +261,6 @@ def build_official_test_sequences():
 
     return X_test, y_test
 
-
-# ============================================================
-# 9. RUN SCRIPT
-# ============================================================
 
 if __name__ == "__main__":
 
