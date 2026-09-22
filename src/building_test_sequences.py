@@ -5,18 +5,27 @@ This file:
 
 1. Loads NASA's official test_FD001.txt
 2. Removes the same 6 constant sensors removed during training
-3. Loads the scaler fitted ONLY on training data
-4. Applies scaler.transform() to the test data
-5. Takes the LAST WINDOW_SIZE cycles from each test engine
-6. Pads engines with fewer than WINDOW_SIZE cycles
-7. Loads the true RUL values from RUL_FD001.txt
-8. Applies the same RUL cap used during training (125)
-9. Saves X_test and y_test as .npy files
+3. Applies per-engine baseline deviation to the sensor columns, using
+   each test engine's own first BASELINE_CYCLES cycles -- the same
+   transform applied to the training data in 01_data_cleaning.ipynb
+4. Loads the scaler fitted ONLY on training data
+5. Applies scaler.transform() to the (deviation-transformed) test data
+6. Takes the LAST WINDOW_SIZE cycles from each test engine
+7. Pads engines with fewer than WINDOW_SIZE cycles
+8. Loads the true RUL values from RUL_FD001.txt
+9. Applies the same RUL cap used during training (125)
+10. Saves X_test and y_test as .npy files
 
 IMPORTANT:
 The trained LSTM expects 18 features per cycle.
 
 Therefore, this file DOES NOT create trend features.
+
+Baseline deviation must be computed BEFORE the last-WINDOW_SIZE-cycles
+window is taken, using each engine's full available history in the raw
+test file -- not just the final window -- otherwise there would be no
+"early life" left to baseline against once an engine is truncated to
+its last 30 cycles.
 
 Expected output:
 
@@ -30,6 +39,10 @@ import pandas as pd
 
 WINDOW_SIZE = 30
 RUL_CAP = 125
+
+# Must match BASELINE_CYCLES in 01_data_cleaning.ipynb exactly, or the
+# test-time transform will not match what the model was trained on.
+BASELINE_CYCLES = 20
 
 CONSTANT_SENSORS = [
     "sensor_1",
@@ -45,6 +58,12 @@ COLUMNS = (
     ["unit_id", "cycle", "setting_1", "setting_2", "setting_3"]
     + [f"sensor_{i}" for i in range(1, 22)]
 )
+
+SENSOR_COLUMNS = [
+    column
+    for column in COLUMNS
+    if column.startswith("sensor") and column not in CONSTANT_SENSORS
+]
 
 
 TEST_RAW_PATH = "../CMAPSSData/Raw/test_FD001.txt"
@@ -91,6 +110,27 @@ def build_official_test_sequences():
         print("  -", sensor)
 
     df = df.drop(columns=CONSTANT_SENSORS)
+
+    print(
+        "\nApplying per-engine baseline deviation "
+        f"(first {BASELINE_CYCLES} cycles per engine):"
+    )
+
+    df = df.sort_values(by=["unit_id", "cycle"]).reset_index(drop=True)
+
+    baseline = (
+        df.groupby("unit_id")[SENSOR_COLUMNS]
+        .transform(lambda s: s.iloc[:BASELINE_CYCLES].mean())
+    )
+
+    df[SENSOR_COLUMNS] = df[SENSOR_COLUMNS] - baseline
+
+    assert df[SENSOR_COLUMNS].isnull().sum().sum() == 0, (
+        "Baseline deviation introduced NaNs in the test set -- check "
+        "BASELINE_CYCLES and the grouping logic."
+    )
+
+    print("Baseline deviation applied. No NaNs introduced.")
 
     true_rul = pd.read_csv(
         RUL_TRUE_PATH,
