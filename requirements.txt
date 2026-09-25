@@ -6,3 +6,6 @@ tensorflow
 ipykernel
 seaborn
 tqdm
+streamlit
+fastapi
+uvicorn
